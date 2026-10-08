@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>大学コード番号検索</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .controls { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px; }
+        select { padding: 8px; font-size: 14px; min-width: 200px; }
+        table { width: 60%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <h2>大学コード番号検索</h2>
+
+    <div class="controls">
+        <label for="universitySelect">大学名を選択：</label>
+        <select id="universitySelect">
+            <option value="">-- データ読み込み中... --</option>
+        </select>
+    </div>
+
+    <center>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th width="100">大学名</th>
+                <th width="100">学部 学科</th>
+                <th width="50">日程</th>
+                <th width="50">入試方式</th>
+                <th width="100">大学コード</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    </center>
+
+    <script>
+        let csvData = [];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch('./data.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('CSV取得失敗');
+                    // 文字化けする場合は必要に応じて response.arrayBuffer() 等で調整
+                    return response.text();
+                })
+                .then(csvText => {
+                    parseCSV(csvText);
+                })
+                .catch(error => {
+                    console.error("エラー:", error);
+                    alert('data.csv の読み込みに失敗しました。');
+                });
+        });
+
+        function parseCSV(text) {
+            const lines = text.split(/\r\n|\n/);
+            csvData = [];
+            const uniqueUniversities = [];
+            const seenUniversities = new Set();
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                const columns = lines[i].split(',');
+                if (columns.length >= 5) {
+                    const uniName = columns[0].trim();
+                    const uniCode = columns[4].trim();
+                    
+                    csvData.push({
+                        uniName: uniName,
+                        faculty: columns[1].trim(),
+                        schedule: columns[2].trim(),
+                        method: columns[3].trim(),
+                        code: uniCode
+                    });
+
+                    if (uniName && !seenUniversities.has(uniName)) {
+                        seenUniversities.add(uniName);
+                        uniqueUniversities.push({ name: uniName, code: uniCode });
+                    }
+                }
+            }
+
+            uniqueUniversities.sort((a, b) => {
+                return a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            createDropdownOptions(uniqueUniversities);
+        }
+
+        function createDropdownOptions(uniList) {
+            const select = document.getElementById('universitySelect');
+            select.innerHTML = '<option value="">-- 大学を選択してください --</option>';
+            
+            uniList.forEach(uni => {
+                const option = document.createElement('option');
+                option.value = uni.name;
+                option.textContent = uni.name; 
+                select.appendChild(option);
+            });
+        }
+
+        document.getElementById('universitySelect').addEventListener('change', function(e) {
+            const selectedUni = e.target.value;
+            const tbody = document.querySelector('#dataTable tbody');
+            tbody.innerHTML = '';
+
+            if (!selectedUni || csvData.length === 0) return;
+
+            const filteredData = csvData.filter(row => row.uniName === selectedUni);
+
+            filteredData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(row.uniName)}</td>
+                    <td>${escapeHtml(row.faculty)}</td>
+                    <td>${escapeHtml(row.schedule)}</td>
+                    <td>${escapeHtml(row.method)}</td>
+                    <td>${escapeHtml(row.code)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[m]));
+        }
+    </script>
+</body>
+</html>
