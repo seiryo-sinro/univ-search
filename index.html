@@ -42,20 +42,23 @@
         let csvData = [];
 
         window.addEventListener('DOMContentLoaded', () => {
-            fetch('./data.csv')
-                .then(response => {
-                    if (!response.ok) throw new Error('CSV取得失敗');
-                    // 文字化けする場合は必要に応じて response.arrayBuffer() 等で調整
-                    return response.text();
-                })
-                .then(csvText => {
-                    parseCSV(csvText);
-                })
-                .catch(error => {
-                    console.error("エラー:", error);
-                    alert('data.csv の読み込みに失敗しました。');
-                });
-        });
+    		fetch('./data.csv')
+        		.then(response => {
+            			if (!response.ok) throw new Error('CSV取得失敗');
+            			// テキストではなくArrayBuffer（バイナリデータ）として取得
+            			return response.arrayBuffer();
+        	})
+        	.then(buffer => {
+            		// Shift_JIS でデコード（文字化けを防止）
+            		const decoder = new TextDecoder('shift-jis');
+            		const csvText = decoder.decode(buffer);
+            		parseCSV(csvText);
+        	})
+        	.catch(error => {
+            		console.error("エラー:", error);
+            		alert('data.csv の読み込みに失敗しました。');
+        	});
+	});
 
         function parseCSV(text) {
             const lines = text.split(/\r\n|\n/);
