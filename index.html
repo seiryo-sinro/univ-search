@@ -42,23 +42,35 @@
         let csvData = [];
 
         window.addEventListener('DOMContentLoaded', () => {
-    		fetch('./data.csv')
-        		.then(response => {
-            			if (!response.ok) throw new Error('CSV取得失敗');
-            			// テキストではなくArrayBuffer（バイナリデータ）として取得
-            			return response.arrayBuffer();
-        	})
-        	.then(buffer => {
-            		// Shift_JIS でデコード（文字化けを防止）
-            		const decoder = new TextDecoder('shift-jis');
-            		const csvText = decoder.decode(buffer);
-            		parseCSV(csvText);
-        	})
-        	.catch(error => {
-            		console.error("エラー:", error);
-            		alert('data.csv の読み込みに失敗しました。');
-        	});
-	});
+            // 元のCSVファイル（data.csv）を読み込み
+            fetch('./data.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('CSV取得失敗');
+                    return response.arrayBuffer();
+                })
+                .then(buffer => {
+                    // Shift_JIS / CP932 でデコード（文字化け防止）
+                    const decoder = new TextDecoder('shift-jis');
+                    const csvText = decoder.decode(buffer);
+                    parseCSV(csvText);
+                })
+                .catch(error => {
+                    console.error("エラー:", error);
+                    alert('data.csv の読み込みに失敗しました。');
+                });
+        });
+
+        // 先頭の「'」や余分なスペースを整形する関数
+        function cleanVal(str) {
+            if (!str) return '';
+            let cleaned = str.trim();
+            // 先頭のシングルクォーテーション「'」を除去
+            if (cleaned.startsWith("'")) {
+                cleaned = cleaned.substring(1);
+            }
+            // 前後の全角・半角スペースを除去
+            return cleaned.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '');
+        }
 
         function parseCSV(text) {
             const lines = text.split(/\r\n|\n/);
@@ -66,28 +78,48 @@
             const uniqueUniversities = [];
             const seenUniversities = new Set();
 
+            // 1行目はヘッダーのため2行目からループ
             for (let i = 1; i < lines.length; i++) {
                 if (lines[i].trim() === '') continue;
+                
                 const columns = lines[i].split(',');
-                if (columns.length >= 5) {
-                    const uniName = columns[0].trim();
-                    const uniCode = columns[4].trim();
-                    
+                if (columns.length >= 11) {
+                    // 各コード列（1〜5列目）を取得して整形
+                    const uniCodePart   = cleanVal(columns[0]).padStart(4, '0'); // 大学ｺｰﾄﾞ (4桁)
+                    const facCodePart   = cleanVal(columns[1]).padStart(2, '0'); // 学部ｺｰﾄﾞ (2桁)
+                    const deptCodePart  = cleanVal(columns[2]).padStart(2, '0'); // 学科ｺｰﾄﾞ (2桁)
+                    const schedCodePart = cleanVal(columns[3]).padStart(1, '0'); // 日程ｺｰﾄﾞ (1桁)
+                    const methodCodePart= cleanVal(columns[4]).padStart(1, '0'); // 方式ｺｰﾄﾞ (1桁)
+
+                    // 10桁の大学コードを生成
+                    const fullCode = uniCodePart + facCodePart + deptCodePart + schedCodePart + methodCodePart;
+
+                    // 各名称列（7〜11列目）を取得
+                    const uniName  = cleanVal(columns[6]);  // 大学名
+                    const facName  = cleanVal(columns[7]);  // 学部名
+                    const deptName = cleanVal(columns[8]);  // 学科名
+                    const sched    = cleanVal(columns[9]);  // 日程
+                    const method   = cleanVal(columns[10]); // 入試方式
+
+                    // 学部名と学科名を結合
+                    const faculty = deptName ? `${facName} ${deptName}` : facName;
+
                     csvData.push({
                         uniName: uniName,
-                        faculty: columns[1].trim(),
-                        schedule: columns[2].trim(),
-                        method: columns[3].trim(),
-                        code: uniCode
+                        faculty: faculty,
+                        schedule: sched,
+                        method: method,
+                        code: fullCode
                     });
 
                     if (uniName && !seenUniversities.has(uniName)) {
                         seenUniversities.add(uniName);
-                        uniqueUniversities.push({ name: uniName, code: uniCode });
+                        uniqueUniversities.push({ name: uniName, code: fullCode });
                     }
                 }
             }
 
+            // 大学コード順（昇順）に並び替え
             uniqueUniversities.sort((a, b) => {
                 return a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
             });
